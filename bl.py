@@ -196,8 +196,9 @@ def main(argv):
         bdir.mkdir(exist_ok=True, parents=True)
 
         Log.start("set time")
-        #conn.eval(f"setTime({time.time()})")
-        Log.end("set time")
+        off = float(conn.eval("getTime()")) - time.time()
+        conn.eval(f"setTime({time.time()})")
+        Log.end(f"set time (offset was {off:.2f})")
 
         Log.start("JSON backup")
         bdir_json = bdir / "json"
