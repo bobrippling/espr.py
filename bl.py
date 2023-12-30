@@ -139,10 +139,7 @@ def backup_file(fname, bdir, conn):
 
     Log.end(f"  backup {fname}")
 
-def main(argv):
-    if len(argv) < 1:
-        usage()
-
+def command(argv):
     if argv[0] == "interact":
         if len(argv) != 2:
             usage()
@@ -218,6 +215,16 @@ def main(argv):
 
     else:
         usage()
+
+def main(argv):
+    if len(argv) < 1:
+        usage()
+
+    try:
+        command(argv)
+    except btle.BTLEDisconnectError as e:
+        print(e)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
