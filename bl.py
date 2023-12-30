@@ -115,6 +115,30 @@ def usage():
     print(f"{sys.argv[0]} nightly <address> backupdir/")
     sys.exit(2)
 
+def backup_file(fname, bdir, conn):
+    hashfname = bdir / f"{fname}.hash"
+
+    Log.start(f"  backup {fname}")
+
+    hash = conn.eval(f"require('Storage').hash('{fname}')")
+    try:
+        with open(hashfname , "r") as f:
+            local_hash = f.readline().strip()
+    except FileNotFoundError:
+        local_hash = ""
+
+    if hash == local_hash:
+        Log.end(f"  backup {fname} (no changes)")
+        return
+
+    new_contents = conn.download(fname)
+    with open(bdir / fname, "w") as f:
+        os.write(f.fileno(), new_contents)
+    with open(hashfname , "w") as f:
+        print(hash, file=f)
+
+    Log.end(f"  backup {fname}")
+
 def main(argv):
     if len(argv) < 1:
         usage()
@@ -176,31 +200,20 @@ def main(argv):
         Log.end("set time")
 
         Log.start("JSON backup")
+        bdir_json = bdir / "json"
+        bdir_json.mkdir(exist_ok=True, parents=True)
         jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
         for fname in jsons:
-            hashfname = bdir / f"{fname}.hash"
-
-            Log.start(f"  backup {fname}")
-
-            hash = conn.eval(f"require('Storage').hash('{fname}')")
-            try:
-                with open(hashfname , "r") as f:
-                    local_hash = f.readline().strip()
-            except FileNotFoundError:
-                local_hash = ""
-
-            if hash == local_hash:
-                Log.end(f"  backup {fname} (no changes)")
-                continue
-
-            new_contents = conn.download(fname)
-            with open(bdir / fname, "w") as f:
-                os.write(f.fileno(), new_contents)
-            with open(hashfname , "w") as f:
-                print(hash, file=f)
-
-            Log.end(f"  backup {fname}")
+            backup_file(fname, bdir_json, conn)
         Log.end("JSON backup")
+
+        Log.start("Health backup")
+        bdir_health = bdir / "health"
+        bdir_health.mkdir(exist_ok=True, parents=True)
+        healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
+        for fname in healths:
+            backup_file(fname, bdir_health, conn)
+        Log.end("Health backup")
 
     else:
         usage()
