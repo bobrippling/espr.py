@@ -1,0 +1,19 @@
+#!/usr/bin/env nix-shell
+# nix-shell -i sh -p python3Packages.bluepy
+#!nix-shell -i sh -p "python3.withPackages (ps: with ps; [ bluepy ])"
+
+set -e
+
+if test $# -ne 1 || test "$1" != backup
+then
+	echo >&2 "Usage: $0 backup"
+	exit 2
+fi
+
+l="$(dirname "$(readlink "$0")")"
+cd "$(dirname "$0")"/"$l"
+
+. ./vars
+
+#. env/bin/activate
+./bl.py nightly "$hw_watch" backup
