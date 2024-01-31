@@ -4,11 +4,32 @@
 
 set -e
 
-if test $# -ne 1 || test "$1" != backup
-then
-	echo >&2 "Usage: $0 backup"
+usage(){
+	echo >&2 "Usage: $0 backup [--quiet]"
 	exit 2
-fi
+}
+
+quiet=
+case "$1" in
+	backup)
+		shift
+		case $# in
+			0) ;;
+			1)
+				if test "$1" = --quiet
+				then quiet="$1"
+				else usage
+				fi
+				;;
+			*)
+				usage
+				;;
+		esac
+		;;
+	*)
+		usage
+		;;
+esac
 
 l="$(dirname "$(readlink "$0")")"
 cd "$(dirname "$0")"/"$l"
@@ -16,4 +37,4 @@ cd "$(dirname "$0")"/"$l"
 . ./vars
 
 #. env/bin/activate
-./bl.py nightly "$hw_watch" backup
+./bl.py nightly $quiet "$hw_watch" backup/
