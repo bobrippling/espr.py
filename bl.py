@@ -93,7 +93,7 @@ class Connection:
         self.wait(1.0)
         self.peripheral.disconnect()
 
-class Log:
+class LogPrint:
     pending = False
 
     @staticmethod
@@ -108,11 +108,19 @@ class Log:
         Log.pending = False
         print(f"[x] {desc}")
 
+class LogNoop:
+    @staticmethod
+    def start(_): pass
+    @staticmethod
+    def end(_): pass
+
+Log = LogPrint
+
 def usage():
     print(f"Usage:");
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
-    print(f"{sys.argv[0]} nightly <address> backupdir/")
+    print(f"{sys.argv[0]} nightly [--quiet] <address> backupdir/")
     sys.exit(2)
 
 def backup_file(fname, bdir, conn):
@@ -183,11 +191,18 @@ def command(argv):
         conn.close()
 
     elif argv[0] == "nightly":
-        if len(argv) != 3:
+        i = 1
+        if i < len(argv) and argv[i] == "--quiet":
+            global Log
+            Log = LogNoop
+            i += 1
+
+        if i + 2 != len(argv):
             usage()
 
-        addr = argv[1]
-        bdir = pathlib.Path(argv[2])
+        addr = argv[i]
+        bdir = pathlib.Path(argv[i + 1])
+
         conn = Connection(addr)
 
         bdir.mkdir(exist_ok=True, parents=True)
