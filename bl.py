@@ -28,6 +28,17 @@ class UART_Delegate(btle.DefaultDelegate):
         self.buf += data
 
 
+class EvalTimeout(TimeoutError):
+    def __init__(self, desc, rxbuf, *args):
+        TimeoutError.__init__(self, desc, *args)
+        self.rxbuf = rxbuf
+
+    def __str__(self):
+        return "\n".join([
+            TimeoutError.__str__(self),
+            f"rxbuf was: {self.rxbuf}"
+        ])
+
 # \x03 = Ctrl-C
 # \x10 = echo off (current line)
 class Connection:
@@ -72,7 +83,7 @@ class Connection:
 
         while self.rx.buf[-3:] != b'\r\n>':
             if time.time() > now + 20:
-                raise TimeoutError("Couldn't eval")
+                raise EvalTimeout("Couldn't eval", self.rx.buf)
             l = self.rx.buf.decode("utf8")
             self.wait(.1)
         r = self.rx.buf[:-3]
