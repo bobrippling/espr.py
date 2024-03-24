@@ -56,12 +56,18 @@ class Connection:
         self.peripheral.writeCharacteristic(nuart_rxnotifyhandle, b"\x01\x00", withResponse=True)
 
         # check connection:
+        r = ""
         for _ in range(2):
-            r = self.eval("1+1")
-            if r == "2":
-                break
+            try:
+                r = self.eval("1+1")
+                if r == "2":
+                    # FIXME: reset() to halt any interrupts/setTimeouts?
+                    break
+            except EvalTimeout as e: # TODO: maybe move this into eval, interrupt on any eval
+                print(f"! {e}")
             print("! interrupting...", file=sys.stderr)
             self.send_bytes(b"\x03")
+            self.wait(.1)
         else:
             raise ValueError(f"watch in odd state, last eval: \"{r}\"")
 
