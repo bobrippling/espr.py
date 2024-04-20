@@ -16,9 +16,19 @@ import select
 import pathlib
 import json
 import base64
+import logging
 from bluepy import btle
 
-# Handle received data
+log_levels = {
+    "error": logging.ERROR,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+    "none": logging.CRITICAL,
+}
+
+logging.basicConfig(level=logging.INFO)
+
 class UART_Delegate(btle.DefaultDelegate):
     def __init__(self):
         btle.DefaultDelegate.__init__(self)
@@ -42,10 +52,10 @@ class EvalTimeout(TimeoutError):
 # \x03 = Ctrl-C
 # \x10 = echo off (current line)
 class Connection:
-    def __init__(self, addr):
+    def __init__(self, addr, delegate=None):
         self.peripheral = btle.Peripheral(addr, "random")
 
-        self.rx = UART_Delegate()
+        self.rx = delegate if delegate else UART_Delegate()
         self.peripheral.setDelegate(self.rx)
 
         self.nuart = self.peripheral.getServiceByUUID(btle.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E"))
@@ -56,20 +66,21 @@ class Connection:
         self.peripheral.writeCharacteristic(nuart_rxnotifyhandle, b"\x01\x00", withResponse=True)
 
         # check connection:
-        r = ""
-        for _ in range(2):
-            try:
-                r = self.eval("1+1")
-                if r == "2":
-                    # FIXME: reset() to halt any interrupts/setTimeouts?
-                    break
-            except EvalTimeout as e: # TODO: maybe move this into eval, interrupt on any eval
-                print(f"! {e}")
-            print("! interrupting...", file=sys.stderr)
-            self.send_bytes(b"\x03")
-            self.wait(.1)
-        else:
-            raise ValueError(f"watch in odd state, last eval: \"{r}\"")
+        if delegate is None: # using UART_Delegate, check:
+            r = ""
+            for _ in range(2):
+                try:
+                    r = self.eval("1+1")
+                    if r == "2":
+                        # FIXME: reset() to halt any interrupts/setTimeouts?
+                        break
+                except EvalTimeout as e: # TODO: maybe move this into eval, interrupt on any eval
+                    print(f"! {e}")
+                print("! interrupting...", file=sys.stderr)
+                self.send_bytes(b"\x03")
+                self.wait(.1)
+            else:
+                raise ValueError(f"watch in odd state, last eval: \"{r}\"")
 
     def send_bytes(self, command):
         while len(command) > 0:
@@ -138,6 +149,7 @@ def usage():
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
     print(f"{sys.argv[0]} nightly [--quiet] <address> backupdir/")
+    print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
 def backup_file(fname, bdir, conn):
@@ -245,8 +257,114 @@ def command(argv):
             backup_file(fname, bdir_health, conn)
         Log.end("Health backup")
 
+    elif argv[0] == "daemon":
+        if len(argv) != 2:
+            usage()
+
+        addr = argv[1]
+        daemon(addr)
+
     else:
         usage()
+
+def daemon(addr):
+    import json
+
+    class LineDelegate(btle.DefaultDelegate):
+        def __init__(self, log_transport, log_reqs):
+            btle.DefaultDelegate.__init__(self)
+            self.buf = b''
+            self.conn = None
+            self.log_transport = log_transport
+            self.log_reqs = log_reqs
+
+        def handleNotification(self, c_handle, data):
+            self.buf += data
+
+            while True:
+                try:
+                    i = self.buf.index(b"\n")
+                except ValueError:
+                    break
+
+                line = self.buf[:i]
+                self.buf = self.buf[i+1:]
+                self.handleLine(line)
+
+        def handleLine(self, line):
+            self.log_transport.info(f"line: {line}")
+            try:
+                j = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                return
+
+            if j.get("t") != "http":
+                return
+
+            self.handleHttp(j)
+
+        def handleHttp(self, req):
+            self.log_reqs.info(f"req: {req}")
+
+            resp = {
+                "id": req["id"],
+                #err: "...",
+                "s": "echo:" + json.dumps(req.get("body")),
+            }
+
+            out = self.conn.eval(f"Bangle.httpResp({json.dumps(resp)})")
+
+            self.log_reqs.info(f"req dispatch: {out}")
+
+    log_transport = logging.getLogger("transport")
+    log_reqs = logging.getLogger("requests")
+
+    logenv = os.environ.get("BL_LOG")
+    if logenv:
+        for ent in logenv.split(","):
+            mod_lvl = ent.split("=", maxsplit=1)
+            if len(mod_lvl) == 1:
+                mod = mod_lvl
+                lvl = "info"
+            else:
+                assert len(mod_lvl) == 2
+                mod, lvl = mod_lvl
+
+            lvl_val = log_levels.get(lvl)
+            if not lvl_val:
+                logging.error(f"Invalid log level \"{lvl}\"")
+                sys.exit(2)
+
+            if mod == "transport":
+                logger = log_transport
+            elif mod == "requests":
+                logger = log_reqs
+            else:
+                logging.error(f"Invalid log module \"{mod}\"")
+                sys.exit(2)
+
+            print(f"set {mod} to {lvl}")
+            logger.setLevel(lvl_val)
+
+    while True:
+        delegate = LineDelegate(log_transport, log_reqs)
+        try:
+            conn = Connection(addr, delegate)
+        except btle.BTLEDisconnectError as e:
+            logging.warning("connect:", e)
+            time.sleep(30)
+            continue
+        delegate.conn = conn
+
+        logging.info(f"connected to {addr}")
+
+        while True:
+            try:
+                conn.wait(10.0)
+            except EvalTimeout as e:
+                logging.warning(f"timeout: {e}")
+                break
+
 
 def main(argv):
     if len(argv) < 1:
