@@ -37,4 +37,5 @@ cd "$(dirname "$0")"/"$l"
 . ./vars
 
 #. env/bin/activate
+# ^ no env, instead we run in a nix-shell
 ./bl.py nightly $quiet "$hw_watch" backup/
