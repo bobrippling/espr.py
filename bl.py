@@ -11,6 +11,7 @@
 
 import sys
 import os
+import subprocess
 import time
 import select
 import pathlib
@@ -300,8 +301,12 @@ def daemon(addr):
                 return
 
             try:
-                if j.get("t") == "http":
+                t = j.get("t")
+
+                if t == "http":
                     self.handleHttp(j)
+                elif t == "intent":
+                    self.handleIntent(j)
             except Exception as e:
                 self.log_transport.error(str(e))
                 return
@@ -318,6 +323,64 @@ def daemon(addr):
             out = self.conn.eval(f"Bangle.httpResp({json.dumps(resp)})")
 
             self.log_reqs.info(f"req dispatch: {out}")
+
+        def handleIntent(self, req):
+            self.log_reqs.debug(f"req: {req}")
+
+            # pretend to be GB
+            # no response, just handle the intent
+            action = req.get("action")
+
+            if action.startswith("com.espruino.gadgetbridge.banglejs"):
+                rest = action[34:]
+
+                if rest == ".HA":
+                    trigger = req["extra"]["trigger"]
+
+                    if trigger == "APP_STARTED" or trigger.startswith("TRIGGER"):
+                        self.log_actions.debug(f"ignoring \"{trigger}\"")
+                        return
+
+                    value = req["extra"].get("value")
+
+                    self.log_actions.info(f"triggering \"{trigger}\"{f', value={value}' if value is not None else ''}")
+
+                    if value is not None:
+                        self.run(["mqtt", "brightness", trigger, str(int(255 * value / 100))])
+                        return
+
+                    out = subprocess.run(["mqtt", "get", trigger], capture_output=True)
+                    if len(out.stderr):
+                        self.log_actions.error(f"error running mqtt: {out.stderr}")
+                        return
+                    if out.returncode != 0:
+                        self.log_actions.error(f"error running mqtt, exitcode {out.returncode}")
+                        return
+
+                    output = out.stdout.strip()
+                    if output == b'ON':
+                        arg = "off"
+                    elif output == b'OFF':
+                        arg = "on"
+                    else:
+                        self.log_actions.error(f"unknown mqtt response {output}")
+                        return
+
+                    if not self.run(["mqtt", "set", trigger, arg]):
+                        return
+
+                else:
+                    self.log_actions.info(f"unknown sub-intent: \"{action}\"")
+                return
+
+            self.log_actions.info(f"unknown intent: \"{action}\"")
+
+        def run(self, cmdlist):
+            out = subprocess.run(cmdlist)
+            if out.returncode != 0:
+                self.log_actions.error(f"error running {cmdlist[0]}, exitcode {out.returncode}")
+                return False
+            return True
 
     log_transport = logging.getLogger("transport")
     log_reqs = logging.getLogger("requests")
