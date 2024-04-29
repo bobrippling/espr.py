@@ -304,7 +304,7 @@ def daemon(addr):
             self.handleHttp(j)
 
         def handleHttp(self, req):
-            self.log_reqs.info(f"req: {req}")
+            self.log_reqs.debug(f"req: {req}")
 
             resp = {
                 "id": req["id"],
