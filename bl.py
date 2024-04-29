@@ -271,12 +271,13 @@ def daemon(addr):
     import json
 
     class LineDelegate(btle.DefaultDelegate):
-        def __init__(self, log_transport, log_reqs):
+        def __init__(self, log_transport, log_reqs, log_actions):
             btle.DefaultDelegate.__init__(self)
             self.buf = b''
             self.conn = None
             self.log_transport = log_transport
             self.log_reqs = log_reqs
+            self.log_actions = log_actions
 
         def handleNotification(self, c_handle, data):
             self.buf += data
@@ -298,10 +299,12 @@ def daemon(addr):
             except json.decoder.JSONDecodeError:
                 return
 
-            if j.get("t") != "http":
+            try:
+                if j.get("t") == "http":
+                    self.handleHttp(j)
+            except Exception as e:
+                self.log_transport.error(str(e))
                 return
-
-            self.handleHttp(j)
 
         def handleHttp(self, req):
             self.log_reqs.debug(f"req: {req}")
@@ -318,6 +321,9 @@ def daemon(addr):
 
     log_transport = logging.getLogger("transport")
     log_reqs = logging.getLogger("requests")
+    log_actions = logging.getLogger("actions")
+
+    log_transport.setLevel(logging.WARNING)
 
     logenv = os.environ.get("BL_LOG")
     if logenv:
@@ -335,19 +341,24 @@ def daemon(addr):
                 logging.error(f"Invalid log level \"{lvl}\"")
                 sys.exit(2)
 
+            loggers = []
             if mod == "transport":
-                logger = log_transport
+                loggers.append(log_transport)
             elif mod == "requests":
-                logger = log_reqs
+                loggers.append(log_reqs)
+            elif mod == "actions":
+                loggers.append(log_actions)
+            elif mod == "all":
+                loggers.extend([log_actions, log_reqs, log_transport])
             else:
                 logging.error(f"Invalid log module \"{mod}\"")
                 sys.exit(2)
 
-            print(f"set {mod} to {lvl}")
-            logger.setLevel(lvl_val)
+            for logger in loggers:
+                logger.setLevel(lvl_val)
 
     while True:
-        delegate = LineDelegate(log_transport, log_reqs)
+        delegate = LineDelegate(log_transport, log_reqs, log_actions)
         try:
             conn = Connection(addr, delegate)
         except btle.BTLEDisconnectError as e:
