@@ -69,7 +69,7 @@ class Connection:
         # check connection:
         if delegate is None: # using UART_Delegate, check:
             r = ""
-            for _ in range(2):
+            for _ in range(4):
                 try:
                     r = self.eval("1+1")
                     if r == "2":
