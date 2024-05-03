@@ -77,6 +77,7 @@ class Connection:
                         break
                 except EvalTimeout as e: # TODO: maybe move this into eval, interrupt on any eval
                     print(f"! {e}")
+                    print(f"! rxbuf for above: {r}")
                 print("! interrupting...", file=sys.stderr)
                 self.send_bytes(b"\x03")
                 self.wait(.1)
