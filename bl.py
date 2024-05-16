@@ -18,6 +18,7 @@ import pathlib
 import json
 import base64
 import logging
+import json
 from bluepy import btle
 
 log_levels = {
@@ -122,6 +123,117 @@ class Connection:
     def close(self):
         self.wait(1.0)
         self.peripheral.disconnect()
+
+class LineDelegate(btle.DefaultDelegate):
+    def __init__(self, log_transport, log_reqs, log_actions):
+        btle.DefaultDelegate.__init__(self)
+        self.buf = b''
+        self.conn = None
+        self.log_transport = log_transport
+        self.log_reqs = log_reqs
+        self.log_actions = log_actions
+
+    def handleNotification(self, c_handle, data):
+        self.buf += data
+
+        while True:
+            try:
+                i = self.buf.index(b"\n")
+            except ValueError:
+                break
+
+            line = self.buf[:i]
+            self.buf = self.buf[i+1:]
+            self.handleLine(line)
+
+    def handleLine(self, line):
+        self.log_transport.info(f"line: {line}")
+        try:
+            j = json.loads(line)
+        except json.decoder.JSONDecodeError:
+            return
+
+        try:
+            t = j.get("t")
+
+            if t == "http":
+                self.handleHttp(j)
+            elif t == "intent":
+                self.handleIntent(j)
+        except Exception as e:
+            self.log_transport.error(str(e))
+            return
+
+    def handleHttp(self, req):
+        self.log_reqs.debug(f"req: {req}")
+
+        resp = {
+            "id": req["id"],
+            #err: "...",
+            "s": "echo:" + json.dumps(req.get("body")),
+        }
+
+        out = self.conn.eval(f"Bangle.httpResp({json.dumps(resp)})")
+
+        self.log_reqs.info(f"req dispatch: {out}")
+
+    def handleIntent(self, req):
+        self.log_reqs.debug(f"req: {req}")
+
+        # pretend to be GB
+        # no response, just handle the intent
+        action = req.get("action")
+
+        if action.startswith("com.espruino.gadgetbridge.banglejs"):
+            rest = action[34:]
+
+            if rest == ".HA":
+                trigger = req["extra"]["trigger"]
+
+                if trigger == "APP_STARTED" or trigger.startswith("TRIGGER"):
+                    self.log_actions.debug(f"ignoring \"{trigger}\"")
+                    return
+
+                value = req["extra"].get("value")
+
+                self.log_actions.info(f"triggering \"{trigger}\"{f', value={value}' if value is not None else ''}")
+
+                if value is not None:
+                    self.run(["mqtt", "brightness", trigger, str(int(255 * value / 100))])
+                    return
+
+                out = subprocess.run(["mqtt", "get", trigger], capture_output=True)
+                if len(out.stderr):
+                    self.log_actions.error(f"error running mqtt: {out.stderr}")
+                    return
+                if out.returncode != 0:
+                    self.log_actions.error(f"error running mqtt, exitcode {out.returncode}")
+                    return
+
+                output = out.stdout.strip()
+                if output == b'ON':
+                    arg = "off"
+                elif output == b'OFF':
+                    arg = "on"
+                else:
+                    self.log_actions.error(f"unknown mqtt response {output}")
+                    return
+
+                if not self.run(["mqtt", "set", trigger, arg]):
+                    return
+
+            else:
+                self.log_actions.info(f"unknown sub-intent: \"{action}\"")
+            return
+
+        self.log_actions.info(f"unknown intent: \"{action}\"")
+
+    def run(self, cmdlist):
+        out = subprocess.run(cmdlist)
+        if out.returncode != 0:
+            self.log_actions.error(f"error running {cmdlist[0]}, exitcode {out.returncode}")
+            return False
+        return True
 
 class LogPrint:
     pending = False
@@ -270,119 +382,6 @@ def command(argv):
         usage()
 
 def daemon(addr):
-    import json
-
-    class LineDelegate(btle.DefaultDelegate):
-        def __init__(self, log_transport, log_reqs, log_actions):
-            btle.DefaultDelegate.__init__(self)
-            self.buf = b''
-            self.conn = None
-            self.log_transport = log_transport
-            self.log_reqs = log_reqs
-            self.log_actions = log_actions
-
-        def handleNotification(self, c_handle, data):
-            self.buf += data
-
-            while True:
-                try:
-                    i = self.buf.index(b"\n")
-                except ValueError:
-                    break
-
-                line = self.buf[:i]
-                self.buf = self.buf[i+1:]
-                self.handleLine(line)
-
-        def handleLine(self, line):
-            self.log_transport.info(f"line: {line}")
-            try:
-                j = json.loads(line)
-            except json.decoder.JSONDecodeError:
-                return
-
-            try:
-                t = j.get("t")
-
-                if t == "http":
-                    self.handleHttp(j)
-                elif t == "intent":
-                    self.handleIntent(j)
-            except Exception as e:
-                self.log_transport.error(str(e))
-                return
-
-        def handleHttp(self, req):
-            self.log_reqs.debug(f"req: {req}")
-
-            resp = {
-                "id": req["id"],
-                #err: "...",
-                "s": "echo:" + json.dumps(req.get("body")),
-            }
-
-            out = self.conn.eval(f"Bangle.httpResp({json.dumps(resp)})")
-
-            self.log_reqs.info(f"req dispatch: {out}")
-
-        def handleIntent(self, req):
-            self.log_reqs.debug(f"req: {req}")
-
-            # pretend to be GB
-            # no response, just handle the intent
-            action = req.get("action")
-
-            if action.startswith("com.espruino.gadgetbridge.banglejs"):
-                rest = action[34:]
-
-                if rest == ".HA":
-                    trigger = req["extra"]["trigger"]
-
-                    if trigger == "APP_STARTED" or trigger.startswith("TRIGGER"):
-                        self.log_actions.debug(f"ignoring \"{trigger}\"")
-                        return
-
-                    value = req["extra"].get("value")
-
-                    self.log_actions.info(f"triggering \"{trigger}\"{f', value={value}' if value is not None else ''}")
-
-                    if value is not None:
-                        self.run(["mqtt", "brightness", trigger, str(int(255 * value / 100))])
-                        return
-
-                    out = subprocess.run(["mqtt", "get", trigger], capture_output=True)
-                    if len(out.stderr):
-                        self.log_actions.error(f"error running mqtt: {out.stderr}")
-                        return
-                    if out.returncode != 0:
-                        self.log_actions.error(f"error running mqtt, exitcode {out.returncode}")
-                        return
-
-                    output = out.stdout.strip()
-                    if output == b'ON':
-                        arg = "off"
-                    elif output == b'OFF':
-                        arg = "on"
-                    else:
-                        self.log_actions.error(f"unknown mqtt response {output}")
-                        return
-
-                    if not self.run(["mqtt", "set", trigger, arg]):
-                        return
-
-                else:
-                    self.log_actions.info(f"unknown sub-intent: \"{action}\"")
-                return
-
-            self.log_actions.info(f"unknown intent: \"{action}\"")
-
-        def run(self, cmdlist):
-            out = subprocess.run(cmdlist)
-            if out.returncode != 0:
-                self.log_actions.error(f"error running {cmdlist[0]}, exitcode {out.returncode}")
-                return False
-            return True
-
     log_transport = logging.getLogger("transport")
     log_reqs = logging.getLogger("requests")
     log_actions = logging.getLogger("actions")
