@@ -438,7 +438,9 @@ def daemon(addr):
             except EvalTimeout as e:
                 logging.warning(f"timeout: {e}")
                 break
-
+            except btle.BTLEDisconnectError as e:
+                logging.warning(f"wait: {e}")
+                break
 
 def main(argv):
     if len(argv) < 1:
@@ -447,7 +449,7 @@ def main(argv):
     try:
         command(argv)
     except btle.BTLEDisconnectError as e:
-        print(e)
+        print(f"error: {e}")
         sys.exit(1)
     except KeyboardInterrupt:
         sys.exit(1)
