@@ -272,7 +272,10 @@ class LogNoop:
 
 Log = LogPrint
 
-def usage():
+def usage(extra=None):
+    if extra:
+        print(extra);
+        print()
     print(f"Usage:");
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
