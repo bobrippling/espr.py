@@ -356,17 +356,22 @@ def command(argv):
         conn.close()
 
     elif argv[0] == "nightly":
-        i = 1
-        if i < len(argv) and argv[i] == "--quiet":
-            global Log
-            Log = LogNoop
-            i += 1
+        addr = None
+        bdir = None
+        for arg in argv[1:]:
+            if arg == "--quiet":
+                global Log
+                Log = LogNoop
+            elif addr is None:
+                addr = arg
+            elif bdir is None:
+                bdir = pathlib.Path(arg)
+            else:
+                usage(f"extra argument \"{arg}\"")
 
-        if i + 2 != len(argv):
-            usage()
-
-        addr = argv[i]
-        bdir = pathlib.Path(argv[i + 1])
+        if bdir is None:
+            usage("no addr/backup dir given")
+        assert addr is not None
 
         conn = Connection(addr)
 
