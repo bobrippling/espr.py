@@ -55,7 +55,14 @@ class EvalTimeout(TimeoutError):
 # \x10 = echo off (current line)
 class Connection:
     def __init__(self, addr, delegate=None):
-        self.peripheral = btle.Peripheral(addr, "random")
+        try:
+            self.peripheral = btle.Peripheral(addr, "public")
+        except btle.BTLEDisconnectError as e:
+            try:
+                self.peripheral = btle.Peripheral(addr, "random")
+                logging.info(f"connect failed using public, used random address instead")
+            except btle.BTLEDisconnectError:
+                raise
 
         self.rx = delegate if delegate else UART_Delegate()
         self.peripheral.setDelegate(self.rx)
