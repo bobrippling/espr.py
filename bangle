@@ -5,36 +5,39 @@
 set -e
 
 usage(){
-	echo >&2 "Usage: $0 backup [--quiet]"
+	echo >&2 "Usage: $0 backup [--quiet] <mac>"
 	exit 2
 }
 
 quiet=
+mac=
 case "$1" in
 	backup)
 		shift
-		case $# in
-			0) ;;
-			1)
-				if test "$1" = --quiet
-				then quiet="$1"
-				else usage
-				fi
-				;;
-			*)
-				usage
-				;;
-		esac
+		for arg
+		do
+			if test "$arg" = --quiet
+			then quiet="$arg"
+			elif test -z "$mac"
+			then mac="$arg"
+			else usage
+			fi
+		done
 		;;
 	*)
 		usage
 		;;
 esac
 
+if test -z "$mac"
+then usage
+fi
+
 l="$(dirname "$(readlink "$0")")"
 cd "$(dirname "$0")"/"$l"
 
-. ./vars
+#. ./vars
+hw_watch="$mac"
 
 #. env/bin/activate
 # ^ no env, instead we run in a nix-shell
