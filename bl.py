@@ -358,10 +358,19 @@ def command(argv):
     elif argv[0] == "nightly":
         addr = None
         bdir = None
+        set_time = False
+        backup_json = False
+        backup_health = False
         for arg in argv[1:]:
             if arg == "--quiet":
                 global Log
                 Log = LogNoop
+            elif arg == "--set-time":
+                set_time = True
+            elif arg == "--json":
+                backup_json = True
+            elif arg == "--health":
+                backup_health = True
             elif addr is None:
                 addr = arg
             elif bdir is None:
@@ -373,30 +382,38 @@ def command(argv):
             usage("no addr/backup dir given")
         assert addr is not None
 
+        if not set_time and not backup_json and not backup_health:
+            set_time = True
+            backup_json = True
+            backup_health = True
+
         conn = Connection(addr)
 
         bdir.mkdir(exist_ok=True, parents=True)
 
-        Log.start("set time")
-        off = float(conn.eval("getTime()")) - time.time()
-        conn.eval(f"setTime({time.time()})")
-        Log.end(f"set time (offset was {off:.2f})")
+        if set_time:
+            Log.start("set time")
+            off = float(conn.eval("getTime()")) - time.time()
+            conn.eval(f"setTime({time.time()})")
+            Log.end(f"set time (offset was {off:.2f})")
 
-        Log.start("JSON backup")
-        bdir_json = bdir / "json"
-        bdir_json.mkdir(exist_ok=True, parents=True)
-        jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
-        for fname in jsons:
-            backup_file(fname, bdir_json, conn)
-        Log.end("JSON backup")
+        if backup_json:
+            Log.start("JSON backup")
+            bdir_json = bdir / "json"
+            bdir_json.mkdir(exist_ok=True, parents=True)
+            jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
+            for fname in jsons:
+                backup_file(fname, bdir_json, conn)
+            Log.end("JSON backup")
 
-        Log.start("Health backup")
-        bdir_health = bdir / "health"
-        bdir_health.mkdir(exist_ok=True, parents=True)
-        healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
-        for fname in healths:
-            backup_file(fname, bdir_health, conn)
-        Log.end("Health backup")
+        if backup_health:
+            Log.start("Health backup")
+            bdir_health = bdir / "health"
+            bdir_health.mkdir(exist_ok=True, parents=True)
+            healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
+            for fname in healths:
+                backup_file(fname, bdir_health, conn)
+            Log.end("Health backup")
 
     elif argv[0] == "daemon":
         if len(argv) != 2:
