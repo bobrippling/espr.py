@@ -246,15 +246,22 @@ class LogPrint:
         print(f"[.] {desc}", end="\r")
 
     @staticmethod
-    def end(desc):
+    def end(desc, success=True):
         Log.pending = False
-        print(f"[x] {desc}")
+        file = sys.stdout if success else sys.stderr
+        print(f"[{'x' if success else '!'}] {desc}", file=file)
+        if not success:
+            global exitcode
+            exitcode = 1
 
 class LogNoop:
     @staticmethod
     def start(_): pass
     @staticmethod
-    def end(_): pass
+    def end(_desc, success=True):
+        if not success:
+            global exitcode
+            exitcode = 1
 
 Log = LogPrint
 
@@ -282,7 +289,12 @@ def backup_file(fname, bdir, conn):
         Log.end(f"  backup {fname} (no changes)")
         return
 
-    new_contents = conn.download(fname)
+    try:
+        new_contents = conn.download(fname)
+    except binascii.Error as e:
+        Log.end(f"Error decoding: {e}", success=False)
+        return
+
     with open(bdir / fname, "w") as f:
         os.write(f.fileno(), new_contents)
     with open(hashfname , "w") as f:
@@ -450,9 +462,12 @@ def main(argv):
         command(argv)
     except btle.BTLEDisconnectError as e:
         print(f"error: {e}")
-        sys.exit(1)
+        exitcode = 1
     except KeyboardInterrupt:
-        sys.exit(1)
+        exitcode = 1
+
+exitcode = 0
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+    sys.exit(exitcode)
