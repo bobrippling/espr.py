@@ -469,7 +469,7 @@ def daemon(addr):
         try:
             conn = Connection(addr, delegate)
         except btle.BTLEDisconnectError as e:
-            logging.warning("connect:", e)
+            logging.warning(f"connect: {e}")
             time.sleep(30)
             continue
         delegate.conn = conn
