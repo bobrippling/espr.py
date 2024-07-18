@@ -487,6 +487,8 @@ def daemon(addr):
                 break
 
 def main(argv):
+    global exitcode
+
     if len(argv) < 1:
         usage()
 
