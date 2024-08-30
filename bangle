@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 # nix-shell --no-build-output -i sh -p python3Packages.bluepy
-#!nix-shell --no-build-output -i sh -p "python3.withPackages (ps: with ps; [ bluepy ])"
+#!nix-shell --no-build-output -i sh -p "python3.withPackages (ps: with ps; [ bluepy requests ])"
 
 set -e
 
