@@ -2,4 +2,6 @@
 #!nix-shell -i sh -p "python3.withPackages (ps: with ps; [ bluepy ])"
 #### nix-shell -i sh -p python3Packages.bluepy
 
+# note this isn't called by pi-cmd, `./bangle` is called in that case
+
 exec ./bl.py "$@"
