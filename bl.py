@@ -19,6 +19,7 @@ import json
 import base64
 import logging
 import json
+import requests
 from bluepy import btle
 
 log_levels = {
@@ -289,6 +290,7 @@ def usage(extra=None):
     print(f"Usage:");
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
+    print(f"{sys.argv[0]} agps <address>")
     print(f"{sys.argv[0]} nightly [--quiet] <address> backupdir/")
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
@@ -321,6 +323,69 @@ def backup_file(fname, bdir, conn):
         print(hash, file=f)
 
     Log.end(f"  backup {fname}")
+
+def send_agps(conn):
+    def fetch_agps():
+        class NetException(Exception):
+            pass
+
+        url = "https://www.espruino.com/agps/casic.base64";
+        response = requests.get(url)
+        if response.status_code != 200:
+            raise NetException(f"Fetch status: {response.status_code}")
+
+        return base64.b64decode(response.text)
+
+    def casic_checksum(s):
+        cs = 0
+        for ch in s[1:]:
+            cs ^= ord(ch)
+
+        checksum = f"{cs:02X}"
+
+        return f"{s}*{checksum}"
+
+    def ckeval(cmd):
+        print(f"  > {cmd}")
+        s = conn.eval(cmd, raise_exc=True)
+        print(f"  < {s}")
+
+    Log.start(f"  fetch AGPS data")
+    agps_data = fetch_agps()
+    Log.end(f"  fetch AGPS data")
+
+    agpsperiod = "3d"
+    gnss_select = "1" # GPS type only
+
+    # let GPS boot
+    Log.start(f"  gps boot")
+    ckeval("agps_tmo = setTimeout(() => {console.log('agps power down'); Bangle.setGPSPower(0, 'agps')}, 60 * 1000)")
+    ckeval("Bangle.setGPSPower(1, 'agps')")
+    time.sleep(0.5)
+    Log.end(f"  gps boot")
+
+    # set GNSS mode
+    Log.start(f"  gps configure")
+    ckeval(f"Serial1.println(\"{casic_checksum('$PCAS04,' + gnss_select)}\")")
+
+    # enable GGA,GSV,RMC packets (new Bangle.js 2 GPS firmwares don't include RMC by default!)
+    ckeval(f"Serial1.println(\"{casic_checksum('$PCAS03,1,0,0,1,1,0,0,0')}\")")
+    Log.end(f"  gps configure")
+
+    Log.start(f"  agps transfer")
+    chunk_size = 128
+    for i in range(0, len(agps_data), chunk_size):
+        msg = f"  agps transfer ({i}/{len(agps_data)})"
+        Log.start(msg)
+        chunk = agps_data[i : i + chunk_size]
+
+        encoded_chunk = base64.b64encode(chunk).decode('ascii')
+
+        ckeval(f"Serial1.write(atob('{encoded_chunk}'))")
+
+        Log.end(msg)
+    Log.end(f"  agps transfer")
+
 
 def command(argv):
     if argv[0] == "interact":
@@ -365,10 +430,20 @@ def command(argv):
         os.system("stty echo icanon")
         conn.close()
 
+    elif argv[0] == "agps":
+        if len(argv) != 2:
+            usage()
+
+        addr = argv[1]
+        conn = Connection(addr)
+        send_agps(conn)
+        conn.close()
+
     elif argv[0] == "nightly":
         addr = None
         bdir = None
         set_time = False
+        set_agps = False
         backup_json = False
         backup_health = False
         for arg in argv[1:]:
@@ -377,6 +452,8 @@ def command(argv):
                 Log = LogNoop
             elif arg == "--set-time":
                 set_time = True
+            elif arg == "--agps":
+                set_agps = True
             elif arg == "--json":
                 backup_json = True
             elif arg == "--health":
@@ -392,10 +469,11 @@ def command(argv):
             usage("no addr/backup dir given")
         assert addr is not None
 
-        if not set_time and not backup_json and not backup_health:
+        if not set_time and not backup_json and not backup_health and not set_agps:
             set_time = True
             backup_json = True
             backup_health = True
+            set_agps = True
 
         conn = Connection(addr)
 
@@ -424,6 +502,17 @@ def command(argv):
             for fname in healths:
                 backup_file(fname, bdir_health, conn)
             Log.end("Health backup")
+
+        if set_agps:
+            Log.start("AGPS update")
+            try:
+                send_agps(conn)
+            except NetException as e:
+                Log.end(f"AGPS update failed: {e}")
+            else:
+                Log.end(f"AGPS update succeeded")
+
+        conn.close()
 
     elif argv[0] == "daemon":
         if len(argv) != 2:
