@@ -102,7 +102,7 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, decode=True):
+    def eval(self, js, *, decode=True):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
