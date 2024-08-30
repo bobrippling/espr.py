@@ -51,6 +51,9 @@ class EvalTimeout(TimeoutError):
             f"rxbuf was: {self.rxbuf}"
         ])
 
+class EvalException(Exception):
+    pass
+
 # \x03 = Ctrl-C
 # \x10 = echo off (current line)
 class Connection:
@@ -102,7 +105,7 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, *, decode=True):
+    def eval(self, js, *, decode=True, raise_exc=False):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
@@ -114,7 +117,14 @@ class Connection:
             l = self.rx.buf.decode("utf8")
             self.wait(.1)
         r = self.rx.buf[:-3]
-        return r.decode('utf8', errors='backslashreplace') if decode else r
+
+        if not decode:
+            return r
+
+        s = r.decode('utf8', errors='backslashreplace')
+        if raise_exc and s.startswith("Uncaught "):
+            raise EvalException(s)
+        return s
 
     def download(self, fname):
         enc = self.eval(
