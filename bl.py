@@ -316,7 +316,7 @@ def usage(extra=None):
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
     print(f"{sys.argv[0]} agps <address>")
-    print(f"{sys.argv[0]} nightly [--quiet] <address> backupdir/")
+    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json] [--health] <address> backupdir/")
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
