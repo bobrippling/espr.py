@@ -346,9 +346,7 @@ def send_agps(conn):
         return f"{s}*{checksum}"
 
     def ckeval(cmd):
-        print(f"  > {cmd}")
-        s = conn.eval(cmd, raise_exc=True)
-        print(f"  < {s}")
+        conn.eval(cmd, raise_exc=True)
 
     Log.start(f"  fetch AGPS data")
     agps_data = fetch_agps()
