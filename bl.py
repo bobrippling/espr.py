@@ -506,7 +506,7 @@ def command(argv):
             Log.start("set time")
             off = float(conn.eval("getTime()")) - time.time()
             conn.eval(f"setTime({time.time()})")
-            Log.end(f"set time (offset was {off:.2f})")
+            Log.end(f"set time (offset was {off:.2f}s)")
 
         if backup_json:
             Log.start("JSON backup")
