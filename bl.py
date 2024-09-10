@@ -123,6 +123,31 @@ class Connection:
             return r
 
         s = r.decode('utf8', errors='backslashreplace')
+
+        lines = []
+        gb_msgs = []
+        had_gb = False
+        for line in s.split("\n"):
+            if line.startswith('{"t":"'):
+                had_gb = True
+                try:
+                    j = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    had_gb = False
+
+                if had_gb:
+                    gb_msgs.append(j)
+                    # GB sends an empty line before each GB message
+                    if lines[-1] == "\r":
+                        lines.pop()
+                    continue
+
+            lines.append(line)
+
+        for gb_msg in gb_msgs:
+            print(f"got gb message: {gb_msg}", file=sys.stderr)
+
+        s = "\n".join(lines)
         if raise_exc and s.startswith("Uncaught "):
             raise EvalException(s)
         return s
