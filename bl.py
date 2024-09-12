@@ -115,7 +115,6 @@ class Connection:
         while self.rx.buf[-3:] != b'\r\n>':
             if time.time() > now + 20:
                 raise EvalTimeout("Couldn't eval", self.rx.buf)
-            l = self.rx.buf.decode("utf8")
             self.wait(.1)
         r = self.rx.buf[:-3]
 
