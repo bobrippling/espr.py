@@ -83,7 +83,7 @@ class Connection:
             r = ""
             for _ in range(4):
                 try:
-                    r = self.eval("1+1")
+                    r = self.eval("1+1", is_initial=True)
                     if r == "2":
                         # FIXME: reset() to halt any interrupts/setTimeouts?
                         break
@@ -106,13 +106,21 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, *, decode=True, raise_exc=False):
+    def eval(self, js, *, decode=True, raise_exc=False, is_initial=False):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
         now = time.time()
 
-        while self.rx.buf[-3:] != b'\r\n>':
+        while True:
+            if self.rx.buf[-3:] == b'\r\n>':
+                break
+            if is_initial and self.rx.buf[-3:] == b'}\r\n' and b'\r\n>\r\n{' in self.rx.buf:
+                # GB message, retry
+                self.rx.buf = b''
+                self.send_line(f"print({js})")
+                now = time.time()
+
             if time.time() > now + 20:
                 raise EvalTimeout("Couldn't eval", self.rx.buf)
             self.wait(.1)
