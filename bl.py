@@ -22,7 +22,7 @@ import json
 import requests
 from bluepy import btle
 
-log_levels = {
+LOG_LEVELS = {
     "error": logging.ERROR,
     "warning": logging.WARNING,
     "info": logging.INFO,
@@ -578,7 +578,7 @@ def daemon(addr):
                 assert len(mod_lvl) == 2
                 mod, lvl = mod_lvl
 
-            lvl_val = log_levels.get(lvl)
+            lvl_val = LOG_LEVELS.get(lvl)
             if not lvl_val:
                 logging.error(f"Invalid log level \"{lvl}\"")
                 sys.exit(2)
