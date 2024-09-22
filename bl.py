@@ -58,15 +58,18 @@ class EvalException(Exception):
 # \x03 = Ctrl-C
 # \x10 = echo off (current line)
 class Connection:
-    def __init__(self, addr, delegate=None):
-        try:
-            self.peripheral = btle.Peripheral(addr, "public")
-        except btle.BTLEDisconnectError as e:
+    def __init__(self, addr, delegate=None, peripheral=None):
+        if peripheral:
+            self.peripheral = peripheral
+        else:
             try:
-                self.peripheral = btle.Peripheral(addr, "random")
-                logging.info(f"connect failed using public, used random address instead")
-            except btle.BTLEDisconnectError:
-                raise
+                self.peripheral = btle.Peripheral(addr, "public")
+            except btle.BTLEDisconnectError as e:
+                try:
+                    self.peripheral = btle.Peripheral(addr, "random")
+                    logging.info(f"connect failed using public, used random address instead")
+                except btle.BTLEDisconnectError:
+                    raise
 
         self.rx = delegate if delegate else UART_Delegate()
         self.peripheral.setDelegate(self.rx)
@@ -106,7 +109,7 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, *, decode=True, raise_exc=False, is_initial=False):
+    def eval(self, js, *, decode=True, raise_exc=False, is_initial=False, on_gb=None):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
@@ -152,7 +155,10 @@ class Connection:
             lines.append(line)
 
         for gb_msg in gb_msgs:
-            print(f"got gb message: {gb_msg}", file=sys.stderr)
+            if on_gb:
+                on_gb(gb_msg)
+            else:
+                print(f"got gb message: {gb_msg}", file=sys.stderr)
 
         s = "\n".join(lines)
         if raise_exc and s.startswith("Uncaught "):
@@ -629,8 +635,7 @@ def main(argv):
     except KeyboardInterrupt:
         exitcode = 1
 
-exitcode = 0
-
 if __name__ == "__main__":
+    exitcode = 0
     main(sys.argv[1:])
     sys.exit(exitcode)
