@@ -86,7 +86,7 @@ class Connection:
             r = ""
             for _ in range(4):
                 try:
-                    r = self.eval("1+1", is_initial=True)
+                    r = self.eval("1+1")
                     if r == "2":
                         # FIXME: reset() to halt any interrupts/setTimeouts?
                         break
@@ -109,33 +109,45 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, *, decode=True, raise_exc=False, is_initial=False, on_gb=None):
+    def eval(self, js, *, decode=True, raise_exc=False, on_gb=None):
         self.rx.buf = b''
         self.send_line(f"print({js})")
+
+        if not on_gb:
+            on_gb = lambda msg: print(f"got gb message: {msg}", file=sys.stderr)
 
         now = time.time()
 
         while True:
             if self.rx.buf[-3:] == b'\r\n>':
+                r = self.rx.buf[:-3]
                 break
-            if is_initial and self.rx.buf[-3:] == b'}\r\n' and b'\r\n>\r\n{' in self.rx.buf:
-                # GB message, retry
-                self.rx.buf = b''
-                self.send_line(f"print({js})")
-                now = time.time()
+            if self.rx.buf[-3:] == b'}\r\n':
+                last = self.rx.buf.rfind(b'\r\n>\r\n{')
+                if last >= 0:
+                    # GB message finale, filter out
+                    gb_str = self.rx.buf[last:]
+                    r = self.rx.buf[:last]
+
+                    for line in gb_str.decode('utf8', errors='backslashreplace').split("\r\n"):
+                        try:
+                            j = json.loads(line)
+                        except json.decoder.JSONDecodeError:
+                            continue
+                        on_gb(j)
+                    break
 
             if time.time() > now + 20:
                 raise EvalTimeout("Couldn't eval", self.rx.buf)
             self.wait(.1)
-        r = self.rx.buf[:-3]
 
         if not decode:
             return r
 
         s = r.decode('utf8', errors='backslashreplace')
 
+        # look for interspersed GB too
         lines = []
-        gb_msgs = []
         had_gb = False
         for line in s.split("\n"):
             if line.startswith('{"t":"'):
@@ -146,19 +158,13 @@ class Connection:
                     had_gb = False
 
                 if had_gb:
-                    gb_msgs.append(j)
+                    on_gb(j)
                     # GB sends an empty line before each GB message
                     if lines[-1] == "\r":
                         lines.pop()
                     continue
 
             lines.append(line)
-
-        for gb_msg in gb_msgs:
-            if on_gb:
-                on_gb(gb_msg)
-            else:
-                print(f"got gb message: {gb_msg}", file=sys.stderr)
 
         s = "\n".join(lines)
         if raise_exc and s.startswith("Uncaught "):

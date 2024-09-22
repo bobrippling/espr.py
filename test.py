@@ -44,7 +44,21 @@ def test_gbbefore():
 
     x = conn.eval(
         "1+2",
-        is_initial=True,
+        on_gb=lambda m: gb_msgs.append(m)
+    )
+
+    assert x == '123'
+    assert gb_msgs == [{"t": "mock"}]
+
+def test_gbafter():
+    delegate = MockDelegate()
+    conn = Connection("addr", delegate, MockPeripheral(delegate))
+
+    delegate.nextbuf = b'123\r\n>\r\n{"t":"mock"}\r\n'
+    gb_msgs = []
+
+    x = conn.eval(
+        "1+2",
         on_gb=lambda m: gb_msgs.append(m)
     )
 
@@ -52,3 +66,4 @@ def test_gbbefore():
     assert gb_msgs == [{"t": "mock"}]
 
 test_gbbefore()
+test_gbafter() # used to resend, now we filter-out instead
