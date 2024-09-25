@@ -20,6 +20,7 @@ import base64
 import logging
 import json
 import requests
+import binascii
 from bluepy import btle
 
 LOG_LEVELS = {
