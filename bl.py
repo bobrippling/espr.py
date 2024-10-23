@@ -359,7 +359,7 @@ def backup_file(fname, bdir, conn):
     try:
         new_contents = conn.download(fname)
     except binascii.Error as e:
-        Log.end(f"Error decoding: {e}", success=False)
+        Log.end(f"{fname}: error decoding: {e}", success=False)
         return
 
     with open(bdir / fname, "w") as f:
