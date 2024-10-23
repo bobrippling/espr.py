@@ -309,7 +309,7 @@ class LogPrint:
         print(f"[.] {desc}", end="\r")
 
     @staticmethod
-    def end(desc, success=True):
+    def end(desc, *, success=True):
         Log.pending = False
         file = sys.stdout if success else sys.stderr
         print(f"[{'x' if success else '!'}] {desc}", file=file)
@@ -321,7 +321,7 @@ class LogNoop:
     @staticmethod
     def start(_): pass
     @staticmethod
-    def end(_desc, success=True):
+    def end(_desc, *, success=True):
         if not success:
             global exitcode
             exitcode = 1
