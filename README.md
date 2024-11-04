@@ -22,3 +22,7 @@ devices Bonded
 ```
 
 The address to use will be whatever's set, not the device's original address.
+
+# Controller
+
+`hci0` is used by default (`iface=...`) / hardcoded

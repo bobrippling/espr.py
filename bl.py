@@ -63,12 +63,13 @@ class Connection:
         if peripheral:
             self.peripheral = peripheral
         else:
+            iface = 0 # hci0
             try:
-                self.peripheral = btle.Peripheral(addr, "public")
+                self.peripheral = btle.Peripheral(addr, "public", iface=iface)
             except btle.BTLEDisconnectError as e:
                 logging.error(f"error: {e}, trying random...")
                 try:
-                    self.peripheral = btle.Peripheral(addr, "random")
+                    self.peripheral = btle.Peripheral(addr, "random", iface=iface)
                     logging.info(f"connect failed using public, used random address instead")
                 except btle.BTLEDisconnectError:
                     raise
