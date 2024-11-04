@@ -66,6 +66,7 @@ class Connection:
             try:
                 self.peripheral = btle.Peripheral(addr, "public")
             except btle.BTLEDisconnectError as e:
+                logging.error(f"error: {e}, trying random...")
                 try:
                     self.peripheral = btle.Peripheral(addr, "random")
                     logging.info(f"connect failed using public, used random address instead")
