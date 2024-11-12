@@ -356,13 +356,13 @@ def backup_file(fname, bdir, conn):
 
     if hash == local_hash:
         Log.end(f"  backup {fname} (no changes)")
-        return
+        return True
 
     try:
         new_contents = conn.download(fname)
     except binascii.Error as e:
         Log.end(f"{fname}: error decoding: {e}", success=False)
-        return
+        return False
 
     with open(bdir / fname, "w") as f:
         os.write(f.fileno(), new_contents)
@@ -370,6 +370,7 @@ def backup_file(fname, bdir, conn):
         print(hash, file=f)
 
     Log.end(f"  backup {fname}")
+    return True
 
 def send_agps(conn):
     def fetch_agps():
