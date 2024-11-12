@@ -338,7 +338,7 @@ def usage(extra=None):
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
     print(f"{sys.argv[0]} agps <address>")
-    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json] [--health] <address> backupdir/")
+    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json] [--health] [--notes] <address> backupdir/")
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
@@ -492,6 +492,7 @@ def command(argv):
         set_agps = False
         backup_json = False
         backup_health = False
+        fetch_notes = False
         for arg in argv[1:]:
             if arg == "--quiet":
                 global Log
@@ -504,6 +505,8 @@ def command(argv):
                 backup_json = True
             elif arg == "--health":
                 backup_health = True
+            elif arg == "--notes":
+                fetch_notes = True
             elif addr is None:
                 addr = arg
             elif bdir is None:
@@ -515,10 +518,11 @@ def command(argv):
             usage("no addr/backup dir given")
         assert addr is not None
 
-        if not set_time and not backup_json and not backup_health and not set_agps:
+        if not set_time and not backup_json and not backup_health and not set_agps and not fetch_notes:
             set_time = True
             backup_json = True
             backup_health = True
+            fetch_notes = True
             set_agps = True
 
         conn = Connection(addr)
@@ -531,13 +535,15 @@ def command(argv):
             conn.eval(f"setTime({time.time()})")
             Log.end(f"set time (offset was {off:.2f}s)")
 
+        backed_up = set()
         if backup_json:
             Log.start("JSON backup")
             bdir_json = bdir / "json"
             bdir_json.mkdir(exist_ok=True, parents=True)
             jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
             for fname in jsons:
-                backup_file(fname, bdir_json, conn)
+                if backup_file(fname, bdir_json, conn):
+                    backed_up.add(fname)
             Log.end("JSON backup")
 
         if backup_health:
@@ -548,6 +554,25 @@ def command(argv):
             for fname in healths:
                 backup_file(fname, bdir_health, conn)
             Log.end("Health backup")
+
+        if fetch_notes:
+            Log.start("Notes fetch (/clear)")
+
+            fname = "noteify.json"
+            if fname in backed_up:
+                path = bdir / "json" / fname
+
+                r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
+                assert r is None
+
+                notes_path = bdir / "notes.json"
+                with open(path, "r") as src, open(notes_path, "a") as notes:
+                    notes.write(src.read())
+                os.remove(path)
+
+                Log.end(f"Notes fetch (/clear) --> {notes_path}")
+            else:
+                Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
 
         if set_agps:
             Log.start("AGPS update")
