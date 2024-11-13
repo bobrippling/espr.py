@@ -563,14 +563,15 @@ def command(argv):
                 path = bdir / "json" / fname
 
                 r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
-                assert r is None
+                if r == True:
+                    notes_path = bdir / "notes.json"
+                    with open(path, "r") as src, open(notes_path, "a") as notes:
+                        notes.write(src.read())
+                    os.remove(path)
 
-                notes_path = bdir / "notes.json"
-                with open(path, "r") as src, open(notes_path, "a") as notes:
-                    notes.write(src.read())
-                os.remove(path)
-
-                Log.end(f"Notes fetch (/clear) --> {notes_path}")
+                    Log.end(f"Notes fetch (/clear) --> {notes_path}")
+                else:
+                    Log.end(f"Notes fetch (/clear): write noteify.json failed", success=False)
             else:
                 Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
 
