@@ -313,6 +313,8 @@ class LogPrint:
     def end(desc, *, success=True):
         Log.pending = False
         file = sys.stdout if success else sys.stderr
+        if not success:
+            sys.stdout.flush()
         print(f"[{'x' if success else '!'}] {desc}", file=file)
         if not success:
             global exitcode
