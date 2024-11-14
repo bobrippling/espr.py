@@ -372,11 +372,11 @@ def backup_file(fname, bdir, conn):
     Log.end(f"  backup {fname}")
     return True
 
+class NetException(Exception):
+    pass
+
 def send_agps(conn):
     def fetch_agps():
-        class NetException(Exception):
-            pass
-
         url = "https://www.espruino.com/agps/casic.base64";
         response = requests.get(url)
         if response.status_code != 200:
