@@ -563,7 +563,10 @@ def command(argv):
             Log.start("Notes fetch (/clear)")
 
             fname = "noteify.json"
-            if fname in backed_up:
+            if fname in backed_up or not backup_json:
+                if not backup_json:
+                    Log.start("Notes fetch (/clear) - no json but continuing, as asked")
+
                 path = bdir / "json" / fname
 
                 r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
