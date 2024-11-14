@@ -15,7 +15,6 @@ import subprocess
 import time
 import select
 import pathlib
-import json
 import base64
 import logging
 import json
