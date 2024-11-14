@@ -124,6 +124,9 @@ class Connection:
             if self.rx.buf[-3:] == b'\r\n>':
                 r = self.rx.buf[:-3]
                 break
+            if self.rx.buf[-3:] == b'\r>':
+                r = self.rx.buf[:-2]
+                break
             if self.rx.buf[-3:] == b'}\r\n':
                 last = self.rx.buf.rfind(b'\r\n>\r\n{')
                 if last >= 0:
