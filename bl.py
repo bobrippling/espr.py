@@ -103,6 +103,9 @@ class Connection:
             else:
                 raise ValueError(f"watch in odd state, last eval: \"{r}\"")
 
+    def __del__(self):
+        self.disconnect()
+
     def send_bytes(self, command):
         while len(command) > 0:
             self.nuart_tx.write(command[0:20])
