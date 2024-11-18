@@ -59,6 +59,8 @@ class EvalException(Exception):
 # \x10 = echo off (current line)
 class Connection:
     def __init__(self, addr, delegate=None, peripheral=None):
+        self.need_disconnect = True
+
         if peripheral:
             self.peripheral = peripheral
         else:
@@ -189,7 +191,13 @@ class Connection:
 
     def close(self):
         self.wait(1.0)
-        self.peripheral.disconnect()
+        self.disconnect()
+
+    def disconnect(self):
+        if self.need_disconnect:
+            self.need_disconnect = False
+            if self.peripheral:
+                self.peripheral.disconnect()
 
 class LineDelegate(btle.DefaultDelegate):
     def __init__(self, log_transport, log_reqs, log_actions):
