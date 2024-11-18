@@ -541,72 +541,72 @@ def command(argv):
             set_agps = True
 
         conn = Connection(addr)
+        try:
+            bdir.mkdir(exist_ok=True, parents=True)
 
-        bdir.mkdir(exist_ok=True, parents=True)
+            if set_time:
+                Log.start("set time")
+                off = float(conn.eval("getTime()")) - time.time()
+                conn.eval(f"setTime({time.time()})")
+                Log.end(f"set time (offset was {off:.2f}s)")
 
-        if set_time:
-            Log.start("set time")
-            off = float(conn.eval("getTime()")) - time.time()
-            conn.eval(f"setTime({time.time()})")
-            Log.end(f"set time (offset was {off:.2f}s)")
+            backed_up = set()
+            if backup_json:
+                Log.start("JSON backup")
+                bdir_json = bdir / "json"
+                bdir_json.mkdir(exist_ok=True, parents=True)
+                jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
+                for fname in jsons:
+                    if backup_file(fname, bdir_json, conn):
+                        backed_up.add(fname)
+                Log.end("JSON backup")
 
-        backed_up = set()
-        if backup_json:
-            Log.start("JSON backup")
-            bdir_json = bdir / "json"
-            bdir_json.mkdir(exist_ok=True, parents=True)
-            jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
-            for fname in jsons:
-                if backup_file(fname, bdir_json, conn):
-                    backed_up.add(fname)
-            Log.end("JSON backup")
+            if backup_health:
+                Log.start("Health backup")
+                bdir_health = bdir / "health"
+                bdir_health.mkdir(exist_ok=True, parents=True)
+                healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
+                for fname in healths:
+                    backup_file(fname, bdir_health, conn)
+                Log.end("Health backup")
 
-        if backup_health:
-            Log.start("Health backup")
-            bdir_health = bdir / "health"
-            bdir_health.mkdir(exist_ok=True, parents=True)
-            healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
-            for fname in healths:
-                backup_file(fname, bdir_health, conn)
-            Log.end("Health backup")
+            if fetch_notes:
+                Log.start("Notes fetch (/clear)")
 
-        if fetch_notes:
-            Log.start("Notes fetch (/clear)")
+                fname = "noteify.json"
+                if fname in backed_up or not backup_json:
+                    if not backup_json:
+                        Log.start("Notes fetch (/clear) - no json but continuing, as asked")
 
-            fname = "noteify.json"
-            if fname in backed_up or not backup_json:
-                if not backup_json:
-                    Log.start("Notes fetch (/clear) - no json but continuing, as asked")
+                    path = bdir / "json" / fname
 
-                path = bdir / "json" / fname
+                    r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
+                    try:
+                        r = json.loads(r)
+                    except json.decoder.JSONDecodeError:
+                        pass
+                    if r == True:
+                        notes_path = bdir / "notes.json"
+                        with open(path, "r") as src, open(notes_path, "a") as notes:
+                            notes.write(src.read())
+                        os.remove(path)
 
-                r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
-                try:
-                    r = json.loads(r)
-                except json.decoder.JSONDecodeError:
-                    pass
-                if r == True:
-                    notes_path = bdir / "notes.json"
-                    with open(path, "r") as src, open(notes_path, "a") as notes:
-                        notes.write(src.read())
-                    os.remove(path)
-
-                    Log.end(f"Notes fetch (/clear) --> {notes_path}")
+                        Log.end(f"Notes fetch (/clear) --> {notes_path}")
+                    else:
+                        Log.end(f"Notes fetch (/clear): write noteify.json failed (got {r})", success=False)
                 else:
-                    Log.end(f"Notes fetch (/clear): write noteify.json failed (got {r})", success=False)
-            else:
-                Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
+                    Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
 
-        if set_agps:
-            Log.start("AGPS update")
-            try:
-                send_agps(conn)
-            except NetException as e:
-                Log.end(f"AGPS update failed: {e}")
-            else:
-                Log.end(f"AGPS update succeeded")
-
-        conn.close()
+            if set_agps:
+                Log.start("AGPS update")
+                try:
+                    send_agps(conn)
+                except NetException as e:
+                    Log.end(f"AGPS update failed: {e}")
+                else:
+                    Log.end(f"AGPS update succeeded")
+        finally:
+            conn.close()
 
     elif argv[0] == "daemon":
         if len(argv) != 2:
