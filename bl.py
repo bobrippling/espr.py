@@ -587,11 +587,14 @@ def command(argv):
                         pass
                     if r == True:
                         notes_path = bdir / "notes.json"
-                        with open(path, "r") as src, open(notes_path, "a") as notes:
-                            notes.write(src.read())
-                        os.remove(path)
-
-                        Log.end(f"Notes fetch (/clear) --> {notes_path}")
+                        try:
+                            with open(path, "r") as src, open(notes_path, "a") as notes:
+                                notes.write(src.read())
+                            os.remove(path)
+                        except FileNotFoundError:
+                            Log.end(f"Notes fetch (/clear): no notes")
+                        else:
+                            Log.end(f"Notes fetch (/clear) --> {notes_path}")
                     else:
                         Log.end(f"Notes fetch (/clear): write noteify.json failed (got {r})", success=False)
                 else:
