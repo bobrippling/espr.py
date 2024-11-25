@@ -148,7 +148,7 @@ class Connection:
                     break
 
             if time.time() > now + 20:
-                raise EvalTimeout("Couldn't eval", self.rx.buf)
+                raise EvalTimeout("Timeout", self.rx.buf)
             self.wait(.1)
 
         if not decode:
