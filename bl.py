@@ -447,6 +447,16 @@ def send_agps(conn):
         Log.end(msg)
     Log.end(f"  agps transfer")
 
+def retry(fn):
+    total = 3
+    for n in range(total):
+        try:
+            fn()
+        except EvalTimeout as e:
+            print(f"Attempt {n}/{total} failed: {e}", file=sys.stderr)
+            print(f"Retrying", file=sys.stderr)
+        else:
+            break
 
 def command(argv):
     if argv[0] == "interact":
@@ -601,13 +611,15 @@ def command(argv):
                     Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
 
             if set_agps:
-                Log.start("AGPS update")
-                try:
-                    send_agps(conn)
-                except NetException as e:
-                    Log.end(f"AGPS update failed: {e}")
-                else:
-                    Log.end(f"AGPS update succeeded")
+                def do_agps():
+                    Log.start("AGPS update")
+                    try:
+                        send_agps(conn)
+                    except NetException as e:
+                        Log.end(f"AGPS update failed: {e}")
+                    else:
+                        Log.end(f"AGPS update succeeded")
+                retry(do_agps)
         finally:
             conn.close()
 
