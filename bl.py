@@ -60,6 +60,7 @@ class EvalException(Exception):
 class Connection:
     def __init__(self, addr, delegate=None, peripheral=None):
         self.need_disconnect = True
+        self.peripheral = None
 
         if peripheral:
             self.peripheral = peripheral
