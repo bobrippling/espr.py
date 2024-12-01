@@ -69,7 +69,7 @@ class Connection:
             try:
                 self.peripheral = btle.Peripheral(addr, "public", iface=iface)
             except btle.BTLEDisconnectError as e:
-                logging.error(f"error: {e}, trying random...")
+                #logging.error(f"error: {e}, trying random...")
                 try:
                     self.peripheral = btle.Peripheral(addr, "random", iface=iface)
                     logging.info(f"connect failed using public, used random address instead")
@@ -704,7 +704,7 @@ def main(argv):
     try:
         command(argv)
     except btle.BTLEDisconnectError as e:
-        print(f"error: {e}")
+        print(f"[e] {e}")
         exitcode = 1
     except KeyboardInterrupt:
         exitcode = 1
