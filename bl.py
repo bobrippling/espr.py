@@ -66,15 +66,18 @@ class Connection:
             self.peripheral = peripheral
         else:
             iface = 0 # hci0
-            try:
-                self.peripheral = btle.Peripheral(addr, "public", iface=iface)
-            except btle.BTLEDisconnectError as e:
-                #logging.error(f"error: {e}, trying random...")
+            last_err = None
+            for ty in ["random", "public"]:
+                if last_err is not None:
+                    logging.error(f"error: {last_err}, trying {ty}...")
                 try:
-                    self.peripheral = btle.Peripheral(addr, "random", iface=iface)
-                    logging.info(f"connect failed using public, used random address instead")
-                except btle.BTLEDisconnectError:
-                    raise
+                    self.peripheral = btle.Peripheral(addr, ty, iface=iface)
+                    break
+                except btle.BTLEDisconnectError as e:
+                    last_err = e
+            else:
+                assert last_err
+                raise last_err
 
         self.rx = delegate if delegate else UART_Delegate()
         self.peripheral.setDelegate(self.rx)
