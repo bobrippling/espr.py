@@ -612,7 +612,7 @@ def command(argv):
                     else:
                         Log.end(f"Notes fetch (/clear): write noteify.json failed (got {r})", success=False)
                 else:
-                    Log.end(f"Notes fetch (/clear): no backed-up note file", success=False)
+                    Log.end(f"Notes fetch (/clear): no backed-up note file") # success=True
 
             if set_agps:
                 def do_agps():
