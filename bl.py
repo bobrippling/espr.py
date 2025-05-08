@@ -22,6 +22,8 @@ import requests
 import binascii
 from bluepy import btle
 
+from typing import NoReturn, Optional, Callable, overload, Literal, Union, cast
+
 LOG_LEVELS = {
     "error": logging.ERROR,
     "warning": logging.WARNING,
@@ -36,9 +38,9 @@ class UART_Delegate(btle.DefaultDelegate):
     def __init__(self):
         btle.DefaultDelegate.__init__(self)
         self.buf = b''
-        self.on_notif = None
+        self.on_notif: Optional[Callable[[], None]] = None
 
-    def handleNotification(self, c_handle, data):
+    def handleNotification(self, cHandle, data):
         self.buf += data
 
         on_notif = self.on_notif
@@ -129,7 +131,19 @@ class Connection:
         self.send_bytes(b"\x03\x10" + b + b"\n")
         self.wait(.1)
 
-    def eval(self, js, *, decode=True, raise_exc=False, on_gb=None):
+    @overload
+    def eval(self, js: str, *, decode: Literal[True], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> str:
+        ...
+
+    @overload
+    def eval(self, js: str, *, decode: Literal[False], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> bytes:
+        ...
+
+    @overload
+    def eval(self, js: str, *, decode: bool=True, raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> Union[str, bytes]:
+        ...
+
+    def eval(self, js: str, *, decode=True, raise_exc=False, on_gb=None):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
@@ -198,7 +212,7 @@ class Connection:
         s = "\n".join(lines)
         if raise_exc and s.startswith("Uncaught "):
             raise EvalException(s)
-        return s
+        return cast(str, s) # for some reason EvalException implies s: LiteralString
 
     def download(self, fname, is_sf=False):
         if is_sf:
@@ -240,13 +254,13 @@ class LineDelegate(btle.DefaultDelegate):
     def __init__(self, log_transport, log_reqs, log_actions):
         btle.DefaultDelegate.__init__(self)
         self.buf = b''
-        self.conn = None
+        self.conn: Connection = cast(Connection, None)
         self.log_transport = log_transport
         self.log_reqs = log_reqs
         self.log_actions = log_actions
         self.on_notif = None
 
-    def handleNotification(self, c_handle, data):
+    def handleNotification(self, cHandle, data):
         self.buf += data
 
         while True:
@@ -382,9 +396,9 @@ class LogNoop:
             global exitcode
             exitcode = 1
 
-Log = LogPrint
+Log: LogPrint | LogNoop = LogPrint
 
-def usage(extra=None):
+def usage(extra=None) -> NoReturn:
     if extra:
         print(extra);
         print()
