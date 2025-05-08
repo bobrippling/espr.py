@@ -392,7 +392,7 @@ def usage(extra=None):
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
     print(f"{sys.argv[0]} agps <address>")
-    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json-csv] [--health] [--notes] <address> backupdir/")
+    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json-csv] [--health] [--notes-etc] <address> backupdir/")
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
@@ -503,6 +503,46 @@ def retry(fn):
         else:
             break
 
+def erase_and_move_localfile(
+    *,
+    bdir,
+    watch_fname,
+    output_fname,
+    backed_up_files,
+    backup_json_csv,
+    conn,
+    is_sf=False
+):
+    Log.start("Notes(etc) fetch (/clear)")
+
+    backed_up_fname = bdir / "json" / watch_fname
+
+    if backed_up_fname not in backed_up_files and backup_json_csv:
+        Log.end(f"Notes(etc) fetch (/clear): no backed-up file ({watch_fname})") # success=True
+        return
+
+    if not backup_json_csv:
+        Log.start("Notes(etc) fetch (/clear) - json/csv wasn't backed up, but continuing as asked")
+
+    if is_sf:
+        r = conn.eval(f"require('Storage').open('{watch_fname}', 'r').erase()")
+    else:
+        r = conn.eval(f"require('Storage').erase('{watch_fname}')")
+
+    if r != "undefined":
+        Log.end(f"Notes(etc) fetch (/clear): erase '{watch_fname}' failed (got {r})", success=False)
+        return
+
+    notes_path = bdir / output_fname
+    try:
+        with open(backed_up_fname, "r") as src, open(notes_path, "a") as notes:
+            notes.write(src.read())
+        os.remove(backed_up_fname)
+    except FileNotFoundError as e:
+        Log.end(f"Notes(etc) fetch (/clear): no notes ({e})")
+    else:
+        Log.end(f"Notes(etc) fetch (/clear) --> {notes_path}")
+
 def command(argv):
     if argv[0] == "interact":
         if len(argv) != 2:
@@ -562,7 +602,7 @@ def command(argv):
         set_agps = False
         backup_json_csv = False
         backup_health = False
-        fetch_notes = False
+        fetch_notes_etc = False
         for arg in argv[1:]:
             if arg == "--quiet":
                 global Log
@@ -575,8 +615,8 @@ def command(argv):
                 backup_json_csv = True
             elif arg == "--health":
                 backup_health = True
-            elif arg == "--notes":
-                fetch_notes = True
+            elif arg == "--notes-etc":
+                fetch_notes_etc = True
             elif arg.startswith("-"):
                 usage(f"unknown switch \"{arg}\"")
             elif addr is None:
@@ -590,11 +630,11 @@ def command(argv):
             usage("no addr/backup dir given")
         assert addr is not None
 
-        if not set_time and not backup_json_csv and not backup_health and not set_agps and not fetch_notes:
+        if not set_time and not backup_json_csv and not backup_health and not set_agps and not fetch_notes_etc:
             set_time = True
             backup_json_csv = True
             backup_health = True
-            fetch_notes = True
+            fetch_notes_etc = True
             set_agps = True
 
         conn = Connection(addr)
@@ -640,35 +680,15 @@ def command(argv):
                     backup_file(fname, bdir_health, conn)
                 Log.end("Health backup")
 
-            if fetch_notes:
-                Log.start("Notes fetch (/clear)")
-
-                fname = "noteify.json"
-                if fname in backed_up or not backup_json:
-                    if not backup_json:
-                        Log.start("Notes fetch (/clear) - no json but continuing, as asked")
-
-                    path = bdir / "json" / fname
-
-                    r = conn.eval("require('Storage').write('noteify.json', JSON.stringify([]))")
-                    try:
-                        r = json.loads(r)
-                    except json.decoder.JSONDecodeError:
-                        pass
-                    if r == True:
-                        notes_path = bdir / "notes.json"
-                        try:
-                            with open(path, "r") as src, open(notes_path, "a") as notes:
-                                notes.write(src.read())
-                            os.remove(path)
-                        except FileNotFoundError:
-                            Log.end(f"Notes fetch (/clear): no notes")
-                        else:
-                            Log.end(f"Notes fetch (/clear) --> {notes_path}")
-                    else:
-                        Log.end(f"Notes fetch (/clear): write noteify.json failed (got {r})", success=False)
-                else:
-                    Log.end(f"Notes fetch (/clear): no backed-up note file") # success=True
+            if fetch_notes_etc:
+                erase_and_move_localfile(
+                    watch_fname="noteify.json",
+                    output_fname="notes.json",
+                    backed_up_files=backed_up,
+                    backup_json_csv=backup_json_csv,
+                    bdir=bdir,
+                    conn=conn,
+                )
 
             if set_agps:
                 def do_agps():
