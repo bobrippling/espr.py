@@ -414,22 +414,36 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
     sf_str = " (sf)" if is_sf else ""
     Log.start(f"  backup {fname}{sf_str}")
 
+    hashfname = bdir / f"{fname}.hash"
+
+    try:
+        with open(hashfname , "r") as f:
+            hash_local = f.readline().strip()
+    except FileNotFoundError:
+        hash_local = ""
+
     if not is_sf:
-        hash = conn.eval(f"require('Storage').hash('{fname}')")
-        hashfname = bdir / f"{fname}.hash"
-
-        try:
-            with open(hashfname , "r") as f:
-                local_hash = f.readline().strip()
-        except FileNotFoundError:
-            local_hash = ""
-
-        if hash == local_hash:
-            Log.end(f"  backup {fname}{sf_str} (no changes)")
-            return True
+        hash_watch = conn.eval(f"require('Storage').hash('{fname}')")
     else:
-        # TODO: custom hashing?
-        pass
+        hash_watch = conn.eval(f"""
+            (() => {{
+                let f = require("Storage").open("{fname}", "r");
+                let hash = 0;
+                let s;
+                while((s = f.readLine()) != null){{
+                    for (var i = 0; i < s.length; i++) {{
+                        hash ^= s.charCodeAt(i);
+                        hash = (hash << 5) | (hash >>> 27);
+                        hash &= 0xffffffff;
+                    }}
+                }}
+                return hash >>> 0;
+            }})()
+        """, timeout=60*2)
+
+    if hash_watch == hash_local:
+        Log.end(f"  backup {fname}{sf_str} (no changes)")
+        return True
 
     try:
         new_contents = conn.download(fname, is_sf)
@@ -439,9 +453,8 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
 
     with open(bdir / fname, "w") as f:
         os.write(f.fileno(), new_contents)
-    if not is_sf:
-        with open(hashfname , "w") as f:
-            print(hash, file=f)
+    with open(hashfname , "w") as f:
+        print(hash_watch, file=f)
 
     Log.end(f"  backup {fname}{sf_str}")
     return True
