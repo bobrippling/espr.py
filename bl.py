@@ -52,9 +52,13 @@ class EvalTimeout(TimeoutError):
         self.rxbuf = rxbuf
 
     def __str__(self):
+        msg = self.rxbuf
+        if len(self.rxbuf) > 32:
+            msg = msg[0:16] + "..." + msg[-16:]
+
         return "\n".join([
             TimeoutError.__str__(self),
-            f"rxbuf was: {self.rxbuf}"
+            f"rxbuf was: {msg}"
         ])
 
 class EvalException(Exception):
