@@ -36,9 +36,14 @@ class UART_Delegate(btle.DefaultDelegate):
     def __init__(self):
         btle.DefaultDelegate.__init__(self)
         self.buf = b''
+        self.on_notif = None
 
     def handleNotification(self, c_handle, data):
         self.buf += data
+
+        on_notif = self.on_notif
+        if on_notif is not None:
+            on_notif()
 
 
 class EvalTimeout(TimeoutError):
@@ -127,33 +132,40 @@ class Connection:
         if not on_gb:
             on_gb = lambda msg: print(f"got gb message: {msg}", file=sys.stderr)
 
-        now = time.time()
+        try:
+            now = time.time()
+            def update_time():
+                nonlocal now
+                now = time.time()
+            self.rx.on_notif = update_time
 
-        while True:
-            if self.rx.buf[-3:] == b'\r\n>':
-                r = self.rx.buf[:-3]
-                break
-            if self.rx.buf[-3:] == b'\r>':
-                r = self.rx.buf[:-2]
-                break
-            if self.rx.buf[-3:] == b'}\r\n':
-                last = self.rx.buf.rfind(b'\r\n>\r\n{')
-                if last >= 0:
-                    # GB message finale, filter out
-                    gb_str = self.rx.buf[last:]
-                    r = self.rx.buf[:last]
-
-                    for line in gb_str.decode('utf8', errors='backslashreplace').split("\r\n"):
-                        try:
-                            j = json.loads(line)
-                        except json.decoder.JSONDecodeError:
-                            continue
-                        on_gb(j)
+            while True:
+                if self.rx.buf[-3:] == b'\r\n>':
+                    r = self.rx.buf[:-3]
                     break
+                if self.rx.buf[-3:] == b'\r>':
+                    r = self.rx.buf[:-2]
+                    break
+                if self.rx.buf[-3:] == b'}\r\n':
+                    last = self.rx.buf.rfind(b'\r\n>\r\n{')
+                    if last >= 0:
+                        # GB message finale, filter out
+                        gb_str = self.rx.buf[last:]
+                        r = self.rx.buf[:last]
 
-            if time.time() > now + 20:
-                raise EvalTimeout("Timeout", self.rx.buf)
-            self.wait(.1)
+                        for line in gb_str.decode('utf8', errors='backslashreplace').split("\r\n"):
+                            try:
+                                j = json.loads(line)
+                            except json.decoder.JSONDecodeError:
+                                continue
+                            on_gb(j)
+                        break
+
+                if time.time() > now + 20:
+                    raise EvalTimeout("Timeout", self.rx.buf)
+                self.wait(.1)
+        finally:
+            self.rx.on_notif = None
 
         if not decode:
             return r
@@ -214,6 +226,7 @@ class LineDelegate(btle.DefaultDelegate):
         self.log_transport = log_transport
         self.log_reqs = log_reqs
         self.log_actions = log_actions
+        self.on_notif = None
 
     def handleNotification(self, c_handle, data):
         self.buf += data
@@ -227,6 +240,10 @@ class LineDelegate(btle.DefaultDelegate):
             line = self.buf[:i]
             self.buf = self.buf[i+1:]
             self.handleLine(line)
+
+        on_notif = self.on_notif
+        if on_notif is not None:
+            on_notif()
 
     def handleLine(self, line):
         self.log_transport.info(f"line: {line}")
