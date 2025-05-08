@@ -460,7 +460,7 @@ def send_agps(conn):
     agps_data = fetch_agps()
     Log.end(f"  fetch AGPS data")
 
-    agpsperiod = "3d"
+    #agpsperiod = "3d"
     gnss_select = "1" # GPS type only
 
     # let GPS boot
