@@ -132,18 +132,18 @@ class Connection:
         self.wait(.1)
 
     @overload
-    def eval(self, js: str, *, decode: Literal[True], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> str:
+    def eval(self, js: str, *, decode: Literal[True], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None, timeout: Optional[int]=20) -> str:
         ...
 
     @overload
-    def eval(self, js: str, *, decode: Literal[False], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> bytes:
+    def eval(self, js: str, *, decode: Literal[False], raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None, timeout: Optional[int]=20) -> bytes:
         ...
 
     @overload
-    def eval(self, js: str, *, decode: bool=True, raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None) -> Union[str, bytes]:
+    def eval(self, js: str, *, decode: bool=True, raise_exc: bool=False, on_gb: Optional[Callable[[object], None]]=None, timeout: Optional[int]=20) -> Union[str, bytes]:
         ...
 
-    def eval(self, js: str, *, decode=True, raise_exc=False, on_gb=None):
+    def eval(self, js: str, *, decode=True, raise_exc=False, on_gb=None, timeout=20):
         self.rx.buf = b''
         self.send_line(f"print({js})")
 
@@ -179,7 +179,7 @@ class Connection:
                             on_gb(j)
                         break
 
-                if time.time() > now + 20:
+                if time.time() > now + timeout:
                     raise EvalTimeout("Timeout", self.rx.buf)
                 self.wait(.1)
         finally:
