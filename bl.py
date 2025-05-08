@@ -556,6 +556,8 @@ def command(argv):
                 backup_health = True
             elif arg == "--notes":
                 fetch_notes = True
+            elif arg.startswith("-"):
+                usage(f"unknown switch \"{arg}\"")
             elif addr is None:
                 addr = arg
             elif bdir is None:
