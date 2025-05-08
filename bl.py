@@ -200,12 +200,27 @@ class Connection:
             raise EvalException(s)
         return s
 
-    def download(self, fname):
-        enc = self.eval(
-            f"btoa(require('Storage').read('{fname}'))",
-            decode=False
-        )
-        return base64.decodebytes(enc)
+    def download(self, fname, is_sf=False):
+        if is_sf:
+            s = self.eval(
+                f"""
+                (() => {{
+                    const f = require('Storage').open('{fname}', 'r');
+                    let s;
+                    while((s = f.readLine()) !== undefined)
+                        print(s.replace("\\n", ""))
+                    return "";
+                }})()
+                """,
+                #decode=False
+            )
+            return s.encode("utf-8")
+        else:
+            enc = self.eval(
+                f"btoa(require('Storage').read('{fname}'))",
+                decode=False
+            )
+            return base64.decodebytes(enc)
 
     def wait(self, t):
         while self.peripheral.waitForNotifications(t):
@@ -377,38 +392,44 @@ def usage(extra=None):
     print(f"{sys.argv[0]} interact <address>")
     print(f"{sys.argv[0]} tty <address>")
     print(f"{sys.argv[0]} agps <address>")
-    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json] [--health] [--notes] <address> backupdir/")
+    print(f"{sys.argv[0]} nightly [--quiet] [--set-time] [--agps] [--json-csv] [--health] [--notes] <address> backupdir/")
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
-def backup_file(fname, bdir, conn):
-    hashfname = bdir / f"{fname}.hash"
+def backup_file(fname, bdir, conn, *, is_sf=False):
+    sf_str = " (sf)" if is_sf else ""
+    Log.start(f"  backup {fname}{sf_str}")
 
-    Log.start(f"  backup {fname}")
+    if not is_sf:
+        hash = conn.eval(f"require('Storage').hash('{fname}')")
+        hashfname = bdir / f"{fname}.hash"
 
-    hash = conn.eval(f"require('Storage').hash('{fname}')")
+        try:
+            with open(hashfname , "r") as f:
+                local_hash = f.readline().strip()
+        except FileNotFoundError:
+            local_hash = ""
+
+        if hash == local_hash:
+            Log.end(f"  backup {fname}{sf_str} (no changes)")
+            return True
+    else:
+        # TODO: custom hashing?
+        pass
+
     try:
-        with open(hashfname , "r") as f:
-            local_hash = f.readline().strip()
-    except FileNotFoundError:
-        local_hash = ""
-
-    if hash == local_hash:
-        Log.end(f"  backup {fname} (no changes)")
-        return True
-
-    try:
-        new_contents = conn.download(fname)
+        new_contents = conn.download(fname, is_sf)
     except binascii.Error as e:
         Log.end(f"{fname}: error decoding: {e}", success=False)
         return False
 
     with open(bdir / fname, "w") as f:
         os.write(f.fileno(), new_contents)
-    with open(hashfname , "w") as f:
-        print(hash, file=f)
+    if not is_sf:
+        with open(hashfname , "w") as f:
+            print(hash, file=f)
 
-    Log.end(f"  backup {fname}")
+    Log.end(f"  backup {fname}{sf_str}")
     return True
 
 class NetException(Exception):
@@ -539,7 +560,7 @@ def command(argv):
         bdir = None
         set_time = False
         set_agps = False
-        backup_json = False
+        backup_json_csv = False
         backup_health = False
         fetch_notes = False
         for arg in argv[1:]:
@@ -550,8 +571,8 @@ def command(argv):
                 set_time = True
             elif arg == "--agps":
                 set_agps = True
-            elif arg == "--json":
-                backup_json = True
+            elif arg == "--json-csv":
+                backup_json_csv = True
             elif arg == "--health":
                 backup_health = True
             elif arg == "--notes":
@@ -569,9 +590,9 @@ def command(argv):
             usage("no addr/backup dir given")
         assert addr is not None
 
-        if not set_time and not backup_json and not backup_health and not set_agps and not fetch_notes:
+        if not set_time and not backup_json_csv and not backup_health and not set_agps and not fetch_notes:
             set_time = True
-            backup_json = True
+            backup_json_csv = True
             backup_health = True
             fetch_notes = True
             set_agps = True
@@ -587,13 +608,26 @@ def command(argv):
                 Log.end(f"set time (offset was {off:.2f}s)")
 
             backed_up = set()
-            if backup_json:
+            if backup_json_csv:
                 Log.start("JSON backup")
                 bdir_json = bdir / "json"
                 bdir_json.mkdir(exist_ok=True, parents=True)
-                jsons = json.loads(conn.eval("require('Storage').list(/\\.json$/)"))
-                for fname in jsons:
-                    if backup_file(fname, bdir_json, conn):
+                raw = conn.eval(
+                    """
+                    require('Storage').list(/\\.json$/) \
+                        .map(f => ({f})) \
+                        .filter(x => 0) \
+                        .concat(
+                        require('Storage') \
+                            .list(/\\.csv$/, {sf:1}) \
+                            .map(f => ({f, sf:1})))
+                    """
+                )
+                jsons = json.loads(raw)
+                for ent in jsons:
+                    fname = ent["f"]
+                    is_sf = "sf" in ent
+                    if backup_file(fname, bdir_json, conn, is_sf=is_sf):
                         backed_up.add(fname)
                 Log.end("JSON backup")
 
