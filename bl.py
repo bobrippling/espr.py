@@ -178,16 +178,15 @@ class Connection:
 
         # look for interspersed GB too
         lines = []
-        had_gb = False
         for line in s.split("\n"):
             if line.startswith('{"t":"'):
-                had_gb = True
+                j = None
                 try:
                     j = json.loads(line)
                 except json.decoder.JSONDecodeError:
-                    had_gb = False
+                    j = None
 
-                if had_gb:
+                if j is not None:
                     on_gb(j)
                     # GB sends an empty line before each GB message
                     if lines[-1] == "\r":
