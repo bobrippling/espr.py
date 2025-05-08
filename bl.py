@@ -690,6 +690,16 @@ def command(argv):
                     conn=conn,
                 )
 
+                erase_and_move_localfile(
+                    watch_fname="tallies.csv",
+                    is_sf=True,
+                    output_fname="tallies.csv",
+                    backed_up_files=backed_up,
+                    backup_json_csv=backup_json_csv,
+                    bdir=bdir,
+                    conn=conn,
+                )
+
             if set_agps:
                 def do_agps():
                     Log.start("AGPS update")
