@@ -683,7 +683,6 @@ def command(argv):
                     """
                     require('Storage').list(/\\.json$/) \
                         .map(f => ({f})) \
-                        .filter(x => 0) \
                         .concat(
                         require('Storage') \
                             .list(/\\.csv$/, {sf:1}) \
