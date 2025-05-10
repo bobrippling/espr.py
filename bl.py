@@ -542,9 +542,7 @@ def erase_and_move_localfile(
 ):
     Log.start("Notes(etc) fetch (/clear)")
 
-    backed_up_fname = bdir / "json" / watch_fname
-
-    if backed_up_fname not in backed_up_files and backup_json_csv:
+    if watch_fname not in backed_up_files and backup_json_csv:
         Log.end(f"Notes(etc) fetch (/clear): no backed-up file ({watch_fname})") # success=True
         return
 
@@ -561,6 +559,8 @@ def erase_and_move_localfile(
         return
 
     notes_path = bdir / output_fname
+    backed_up_fname = bdir / "json" / watch_fname
+
     try:
         with open(backed_up_fname, "r") as src, open(notes_path, "a") as notes:
             notes.write(src.read())
