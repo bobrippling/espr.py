@@ -417,29 +417,33 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
     hashfname = bdir / f"{fname}.hash"
 
     try:
-        with open(hashfname , "r") as f:
-            hash_local = f.readline().strip()
-    except FileNotFoundError:
-        hash_local = ""
+        try:
+            with open(hashfname , "r") as f:
+                hash_local = f.readline().strip()
+        except FileNotFoundError:
+            hash_local = ""
 
-    if not is_sf:
-        hash_watch = conn.eval(f"require('Storage').hash('{fname}')")
-    else:
-        hash_watch = conn.eval(f"""
-            (() => {{
-                let f = require("Storage").open("{fname}", "r");
-                let hash = 0;
-                let s;
-                while((s = f.readLine()) != null){{
-                    for (var i = 0; i < s.length; i++) {{
-                        hash ^= s.charCodeAt(i);
-                        hash = (hash << 5) | (hash >>> 27);
-                        hash &= 0xffffffff;
+        if not is_sf:
+            hash_watch = conn.eval(f"require('Storage').hash('{fname}')")
+        else:
+            hash_watch = conn.eval(f"""
+                (() => {{
+                    let f = require("Storage").open("{fname}", "r");
+                    let hash = 0;
+                    let s;
+                    while((s = f.readLine()) != null){{
+                        for (var i = 0; i < s.length; i++) {{
+                            hash ^= s.charCodeAt(i);
+                            hash = (hash << 5) | (hash >>> 27);
+                            hash &= 0xffffffff;
+                        }}
                     }}
-                }}
-                return hash >>> 0;
-            }})()
-        """, timeout=60*2)
+                    return hash >>> 0;
+                }})()
+            """, timeout=60*2)
+    except EvalTimeout:
+        Log.end(f"  backup {fname}{sf_str} (failed)", success=False)
+        raise
 
     if hash_watch == hash_local:
         Log.end(f"  backup {fname}{sf_str} (no changes)")
