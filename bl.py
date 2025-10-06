@@ -426,21 +426,29 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
         if not is_sf:
             hash_watch = conn.eval(f"require('Storage').hash('{fname}')")
         else:
-            hash_watch = conn.eval(f"""
+            lines = conn.eval(f"""
                 (() => {{
                     let f = require("Storage").open("{fname}", "r");
                     let hash = 0;
                     let s;
+                    let n = 0;
                     while((s = f.readLine()) != null){{
                         for (var i = 0; i < s.length; i++) {{
                             hash ^= s.charCodeAt(i);
                             hash = (hash << 5) | (hash >>> 27);
                             hash &= 0xffffffff;
                         }}
+                        if((n % 32) == 0)
+                            print(".")
+                        n++;
                     }}
                     return hash >>> 0;
                 }})()
-            """, timeout=60*2)
+            """, timeout=60*2).strip().split("\n")
+
+            # dots used to avoid timeout
+            hash_watch = lines[-1]
+
     except EvalTimeout:
         Log.end(f"  backup {fname}{sf_str} (failed)", success=False)
         raise
