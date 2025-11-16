@@ -241,8 +241,11 @@ class Connection:
             pass
 
     def close(self):
-        self.wait(1.0)
-        self.disconnect()
+        try:
+            self.wait(1.0)
+            self.disconnect()
+        except btle.BTLEDisconnectError as e:
+            print("Can't close connection - device disconnected", file=sys.stderr)
 
     def disconnect(self):
         if self.need_disconnect:
