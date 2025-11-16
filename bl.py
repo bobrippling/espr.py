@@ -452,7 +452,7 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
             # dots used to avoid timeout
             hash_watch = lines[-1]
 
-    except EvalTimeout:
+    except (EvalTimeout, btle.BTLEDisconnectError):
         Log.end(f"  backup {fname}{sf_str} (failed)", success=False)
         raise
 
