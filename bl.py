@@ -237,21 +237,25 @@ class Connection:
             return base64.decodebytes(enc)
 
     def wait(self, t):
-        while self.peripheral.waitForNotifications(t):
-            pass
+        try:
+            while self.peripheral.waitForNotifications(t):
+                pass
+        except btle.BTLEDisconnectError as e:
+            self.need_disconnect = False
+            raise
 
     def close(self):
-        try:
-            self.wait(1.0)
-            self.disconnect()
-        except btle.BTLEDisconnectError as e:
-            print("Can't close connection - device disconnected", file=sys.stderr)
+        self.disconnect()
 
     def disconnect(self):
         if self.need_disconnect:
             self.need_disconnect = False
             if self.peripheral:
-                self.peripheral.disconnect()
+                try:
+                    self.wait(1.0)
+                    self.peripheral.disconnect()
+                except btle.BTLEDisconnectError as e:
+                    print("Can't close connection - device disconnected", file=sys.stderr)
 
 class LineDelegate(btle.DefaultDelegate):
     def __init__(self, log_transport, log_reqs, log_actions):
