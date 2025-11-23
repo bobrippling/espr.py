@@ -583,7 +583,7 @@ def erase_and_move_localfile(
     try:
         with open(backed_up_fname, "r") as src, open(notes_path, "a") as notes:
             notes.write(src.read())
-        os.remove(backed_up_fname)
+        #os.remove(backed_up_fname) # does this help keep logs if backup fails?
     except FileNotFoundError as e:
         Log.end(f"Notes(etc) fetch (/clear): no notes ({e})")
     else:
