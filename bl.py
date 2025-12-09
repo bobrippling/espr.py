@@ -417,7 +417,7 @@ def usage(extra=None) -> NoReturn:
     print(f"{sys.argv[0]} daemon <address>")
     sys.exit(2)
 
-def backup_file(fname, bdir, conn, *, is_sf=False):
+def backup_file(fname, bdir, conn, *, is_sf=False, decode_is_error=True):
     sf_str = " (sf)" if is_sf else ""
     Log.start(f"  backup {fname}{sf_str}")
 
@@ -467,7 +467,8 @@ def backup_file(fname, bdir, conn, *, is_sf=False):
     try:
         new_contents = conn.download(fname, is_sf)
     except binascii.Error as e:
-        Log.end(f"{fname}: error decoding: {e}", success=False)
+        # if we're ignoring decode errors, don't mark as a failure here
+        Log.end(f"{fname}: error decoding: {e}", success=not decode_is_error)
         return False
 
     with open(bdir / fname, "w") as f:
@@ -722,7 +723,8 @@ def command(argv):
                 bdir_health.mkdir(exist_ok=True, parents=True)
                 healths = json.loads(conn.eval("require('Storage').list(/^health-.*\\.raw$/)"))
                 for fname in healths:
-                    backup_file(fname, bdir_health, conn)
+                    # ignore health decode errors - very regular
+                    backup_file(fname, bdir_health, conn, decode_is_error=False)
                 Log.end("Health backup")
 
             if fetch_notes_etc:
